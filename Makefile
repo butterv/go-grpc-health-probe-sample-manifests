@@ -1,5 +1,5 @@
 run:
-	kubectl apply -k k8s/local/
+	kubectl apply -k k8s/overlays/local/
 
 stop:
-	kubectl delete -k k8s/local/
+	kubectl delete -k k8s/overlays/local/
