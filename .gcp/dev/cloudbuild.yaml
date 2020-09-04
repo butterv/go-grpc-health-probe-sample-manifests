@@ -77,11 +77,12 @@ steps:
       - '-c'
       - |
         set -x && \
-        echo $(gcloud auth list --filter=status:ACTIVE --format='value(account)') && \
         git config --global user.email $(git log --format='%an <%ae>' -n 1 HEAD | sed 's/.*\<\([^>]*\)\>.*/\1/g') && \
         git fetch origin dev && git checkout dev && \
         git checkout $COMMIT_SHA kubernetes.yaml && \
-        git commit -m "Manifest from commit $COMMIT_SHA
+        git commit \
+        --author="Cloud Build Service Account <$(gcloud auth list --filter=status:ACTIVE --format='value(account)')>" \
+        -m "Manifest from commit $COMMIT_SHA
 
         $(git log --format=%B -n 1 $COMMIT_SHA)" && \
         git push origin dev
