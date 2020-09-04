@@ -77,6 +77,7 @@ steps:
       - '-c'
       - |
         set -x && \
+        echo $(gcloud auth list --filter=status:ACTIVE --format='value(account)') && \
         git config --global user.email $(git log --format='%an <%ae>' -n 1 HEAD | sed 's/.*\<\([^>]*\)\>.*/\1/g') && \
         git fetch origin dev && git checkout dev && \
         git checkout $COMMIT_SHA kubernetes.yaml && \
