@@ -14,23 +14,81 @@ steps:
   # This step copies the applied manifest to the production branch
   # The COMMIT_SHA variable is automatically
   # replaced by Cloud Build.
+#  - name: 'gcr.io/cloud-builders/git'
+#    id: Copy to dev branch
+#    entrypoint: /bin/sh
+#    args:
+#    - '-c'
+#    - |
+#      set -x && \
+#      ls && \
+#      cd git && \
+#      # Configure Git to create commits with Cloud Build's service account
+#      git config user.email $(gcloud auth list --filter=status:ACTIVE --format='value(account)') && \
+#      # Switch to the production branch and copy the kubernetes.yaml file from the candidate branch
+#      git fetch origin dev && git checkout dev && \
+#      git checkout $COMMIT_SHA kubernetes.yaml && \
+#      # Commit the kubernetes.yaml file with a descriptive commit message
+#      git commit -m "Manifest from commit $COMMIT_SHA
+#      $(git log --format=%B -n 1 $COMMIT_SHA)" && \
+#      # Push the changes back to Cloud Source Repository
+#      git push origin dev
+
+  # Access the id_github file from Secret Manager`
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: 'bash'
+    args: [ '-c', 'gcloud secrets versions access latest --secret=id_github > /root/.ssh/id_github' ]
+    volumes:
+      - name: 'ssh'
+        path: /root/.ssh
+
+  # Set up git with key and domain
   - name: 'gcr.io/cloud-builders/git'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        chmod 600 /root/.ssh/id_github
+        cat <<EOF >/root/.ssh/config
+        Hostname github.com
+        IdentityFile /root/.ssh/id_github
+        EOF
+        ssh-keyscan -t rsa github.com > /root/.ssh/known_hosts
+    volumes:
+      - name: 'ssh'
+        path: /root/.ssh
+
+  # Connect to the repository
+  - name: 'gcr.io/cloud-builders/git'
+    args:
+      - clone
+      - --recurse-submodules
+      - git@github.com:istsh/go-grpc-health-probe-sample-manifests.git
+    volumes:
+      - name: 'ssh'
+        path: /root/.ssh
+
+  # This step pushes the manifest back to repository
+  - name: 'gcr.io/cloud-builders/gcloud'
     id: Copy to dev branch
+    dir: go-grpc-health-probe-sample-manifests
     entrypoint: /bin/sh
     args:
-    - '-c'
-    - |
-      set -x && \
-      # Configure Git to create commits with Cloud Build's service account
-      git config user.email $(gcloud auth list --filter=status:ACTIVE --format='value(account)') && \
-      # Switch to the production branch and copy the kubernetes.yaml file from the candidate branch
-      git fetch origin dev && git switch dev && \
-      git checkout $COMMIT_SHA kubernetes.yaml && \
-      # Commit the kubernetes.yaml file with a descriptive commit message
-      git commit -m "Manifest from commit $COMMIT_SHA
-      $(git log --format=%B -n 1 $COMMIT_SHA)" && \
-      # Push the changes back to Cloud Source Repository
-      git push origin dev
+      - '-c'
+      - |
+        set -x && \
+        git config --global user.email $(git log --format='%an <%ae>' -n 1 HEAD | sed 's/.*\<\([^>]*\)\>.*/\1/g') && \
+        git fetch origin dev && git checkout dev && \
+        git checkout $COMMIT_SHA kubernetes.yaml && \
+        git commit \
+        --author="Cloud Build Service Account <$(gcloud auth list --filter=status:ACTIVE --format='value(account)')>" \
+        -m "Manifest from commit $COMMIT_SHA
+
+        $(git log --format=%B -n 1 $COMMIT_SHA)" && \
+        git push origin dev
+    volumes:
+      - name: 'ssh'
+        path: /root/.ssh
 
 #sampleリポジトリのプッシュをトリガーに、manifestsリポジトリのcandidateブランチにプッシュされると、このcloudbuild.yamlのstepが実行される
 #first stepのkubectl applyの実行が完了したことを、manifestsリポジトリのcandidateブランチのCOMMIT_SHAを反映するかたちで、manifestsリポジトリのproductionブランチにプッシュする
