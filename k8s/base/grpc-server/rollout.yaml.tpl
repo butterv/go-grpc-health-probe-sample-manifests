@@ -50,7 +50,7 @@ spec:
   strategy:
     blueGreen:
       # 本番アクセス用のServiceの名前
-      activeService: grpc-server
+      activeService: grpc-server-active
       # Previewアクセス用のServiceの名前
       previewService: grpc-server-preview
       # 自動昇格の有無

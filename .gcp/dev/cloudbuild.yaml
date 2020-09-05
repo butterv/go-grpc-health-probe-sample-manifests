@@ -1,38 +1,13 @@
 steps:
-  # This step deploys the new version of our container image
-  # in the hello-cloudbuild Kubernetes Engine cluster.
-#  - name: 'gcr.io/cloud-builders/kubectl'
-#    id: Deploy
-#    args:
-#    - 'apply'
-#    - '-k'
-#    - 'k8s/overlays/dev/'
-#    env:
-#    - 'CLOUDSDK_COMPUTE_ZONE=us-central1-b'
-#    - 'CLOUDSDK_CONTAINER_CLUSTER=go-grpc-health-probe-sample'
-
-  # This step copies the applied manifest to the production branch
-  # The COMMIT_SHA variable is automatically
-  # replaced by Cloud Build.
-#  - name: 'gcr.io/cloud-builders/git'
-#    id: Copy to dev branch
-#    entrypoint: /bin/sh
-#    args:
-#    - '-c'
-#    - |
-#      set -x && \
-#      ls && \
-#      cd git && \
-#      # Configure Git to create commits with Cloud Build's service account
-#      git config user.email $(gcloud auth list --filter=status:ACTIVE --format='value(account)') && \
-#      # Switch to the production branch and copy the kubernetes.yaml file from the candidate branch
-#      git fetch origin dev && git checkout dev && \
-#      git checkout $COMMIT_SHA kubernetes.yaml && \
-#      # Commit the kubernetes.yaml file with a descriptive commit message
-#      git commit -m "Manifest from commit $COMMIT_SHA
-#      $(git log --format=%B -n 1 $COMMIT_SHA)" && \
-#      # Push the changes back to Cloud Source Repository
-#      git push origin dev
+  - id: deploy
+    name: 'gcr.io/cloud-builders/kubectl'
+    args:
+    - 'apply'
+    - '-k'
+    - 'k8s/overlays/dev/'
+    env:
+    - 'CLOUDSDK_COMPUTE_ZONE=${_CLOUDSDK_COMPUTE_ZONE}'
+    - 'CLOUDSDK_CONTAINER_CLUSTER=${_CLOUDSDK_CONTAINER_CLUSTER}'
 
   # Access the id_github file from Secret Manager`
   - name: gcr.io/cloud-builders/gcloud
@@ -63,34 +38,39 @@ steps:
     args:
       - clone
       - --recurse-submodules
-      - git@github.com:istsh/go-grpc-health-probe-sample-manifests.git
+      - git@github.com:istsh/${_MANIFEST_REPOSITORY_NAME}.git
     volumes:
       - name: 'ssh'
         path: /root/.ssh
 
   # This step pushes the manifest back to repository
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: Copy to dev branch
-    dir: go-grpc-health-probe-sample-manifests
+    id: Copy to ${_TARGET_BRANCH} branch
+    dir: ${_MANIFEST_REPOSITORY_NAME}
     entrypoint: /bin/sh
     args:
       - '-c'
       - |
         set -x && \
         git config --global user.email $(git log --format='%an <%ae>' -n 1 HEAD | sed 's/.*\<\([^>]*\)\>.*/\1/g') && \
-        git fetch origin dev && git checkout dev && \
-        git checkout $COMMIT_SHA kubernetes.yaml && \
+        git fetch origin ${_TARGET_BRANCH} && git checkout ${_TARGET_BRANCH} && \
+        git checkout $COMMIT_SHA ${_MANIFEST_DIR_FOR_GRPC_GATEWAY}/${_GENERATED_FILE} && \
+        git checkout $COMMIT_SHA ${_MANIFEST_DIR_FOR_GRPC_SERVER}/${_GENERATED_FILE} && \
         git commit \
         --author="Cloud Build Service Account <$(gcloud auth list --filter=status:ACTIVE --format='value(account)')>" \
         -m "Manifest from commit $COMMIT_SHA
 
         $(git log --format=%B -n 1 $COMMIT_SHA)" && \
-        git push origin dev
+        git push origin ${_TARGET_BRANCH}
     volumes:
       - name: 'ssh'
         path: /root/.ssh
 
-#sampleリポジトリのプッシュをトリガーに、manifestsリポジトリのcandidateブランチにプッシュされると、このcloudbuild.yamlのstepが実行される
-#first stepのkubectl applyの実行が完了したことを、manifestsリポジトリのcandidateブランチのCOMMIT_SHAを反映するかたちで、manifestsリポジトリのproductionブランチにプッシュする
-#candidateブランチ - デプロイ用。トリガーとして使用する
-#productionブランチ - kubectl applyが完了したことを記録するためのブランチ(デプロイ用ではない)
+substitutions:
+  _CLOUDSDK_COMPUTE_ZONE: us-central1-b
+  _CLOUDSDK_CONTAINER_CLUSTER: go-grpc-health-probe-sample
+  _MANIFEST_REPOSITORY_NAME: go-grpc-health-probe-sample-manifests
+  _MANIFEST_DIR_FOR_GRPC_GATEWAY: k8s/base/grpc-gateway
+  _MANIFEST_DIR_FOR_GRPC_SERVER: k8s/base/grpc-server
+  _GENERATED_FILE: rollout.yaml
+  _TARGET_BRANCH: dev
