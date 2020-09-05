@@ -3,7 +3,7 @@ kind: Rollout
 metadata:
   name: grpc-server
 spec:
-  replicas: 4
+  replicas: 2
   revisionHistoryLimit: 3
   selector:
     matchLabels:
