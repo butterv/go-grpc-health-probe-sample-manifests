@@ -3,7 +3,7 @@ kind: Rollout
 metadata:
   name: grpc-gateway
 spec:
-  replicas: 2
+  replicas: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
