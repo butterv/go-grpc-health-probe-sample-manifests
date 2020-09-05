@@ -19,7 +19,7 @@ spec:
             name: envoy-grpc-gateway-config
       containers:
         - name: grpc-gateway
-          image: gcr.io/istsh-sample/grpc-gateway:f0ff279
+          image: gcr.io/istsh-sample/grpc-gateway:915844d
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
